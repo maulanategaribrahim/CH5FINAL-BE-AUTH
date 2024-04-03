@@ -35,28 +35,34 @@ exports.uploadProductPhoto = upload.single("photo");
 
 const createProduct = async (req, res, next) => {
   const { name, price, stock } = req.body;
-  const file = req.file;
-  let img;
+  const files = req.files;
+  let images= [];
 
   try {
-    if (file) {
-      // dapatkan extension file nya
-      const split = file.originalname.split(".");
-      const extension = split[split.length - 1];
-
-      // upload file ke imagekit
-      const uploadedImage = await imagekit.upload({
-        file: file.buffer,
-        fileName: `IMG-${Date.now()}.${extension}`,
-      });
-      img = uploadedImage.url;
+    if (files) {
+      await Promise.all(
+        files.map(async (file) =>{
+          // dapatkan extension file nya
+          const split = file.originalname.split(".");
+          const extension = split[split.length - 1];
+    
+          // upload file ke imagekit
+          const uploadedImage = await imagekit.upload({
+            file: file.buffer,
+            fileName: `IMG-${Date.now()}.${extension}`,
+          });
+          console.log(uploadedImage.url)
+          images.push(uploadedImage.url);
+        })
+      )
     }
+    console.log(images)
 
     const newProduct = await Product.create({
       name,
       price,
       stock,
-      imageUrl: img,
+      imageUrl: images,
       userId: req.user.id,
       shopId: req.user.shopId,
     });
@@ -84,21 +90,40 @@ const findProducts = async (req, res, next) => {
     const includeUserCondition = {};
     if (username) includeUserCondition.name = { [Op.iLike]: `${username}%` };
 
+    // const pageNum = parseInt(page) || 1;
+    // const pageSize = parseInt(limit) || 10;
+    // const offset = (pageNum - 1) * pageSize;
+
     const products = await Product.findAll({
       include: [
         {
           model: Shop,
           where: includeShopCondition,
+          attributes: ['name'],
+        },
+        {
+          model: User,
+          attributes: ['name'],
         },
       ],
       where: condition,
       order: [["id", "ASC"]],
+      // attributes: ["name", "price", "stock", "createdAt", "updatedAt"],
+      // limit: pageSize,
+      // offset: offset,
     });
+
+    // const totalPages = Math.ceil(products.length / pageSize);
 
     res.status(200).json({
       status: "Success",
       data: {
         products,
+        // pagination: {
+        //   totalPages,
+        //   pageNum,
+        //   pageSize,
+        // },
       },
     });
   } catch (err) {
@@ -113,6 +138,14 @@ const findProductById = async (req, res, next) => {
         id: req.params.id,
       },
     });
+
+    console.log(req.user);
+
+    if (product.shopId !== req.user.shopId) {
+      return next(
+        new ApiError("KAMU BUKAN DARI TOKO PEMILIK PRODUK TERSEBUT !!!!", 400)
+      );
+    } 
 
     res.status(200).json({
       status: "Success",
