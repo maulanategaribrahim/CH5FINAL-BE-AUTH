@@ -36,11 +36,16 @@ const register = async (req, res, next) => {
 
     console.log(req.user.shopId);
 
+    let shopId = req.user.shopId
+    if(req.user.role === "Admin" && req.body.shopId){
+      shopId = req.user.shopId
+    }
+
     const newUser = await User.create({
       name,
       address,
       age,
-      shopId: req.user.shopId,
+      shopId,
     });
     const test = await Auth.create({
       email,
@@ -84,6 +89,7 @@ const login = async (req, res, next) => {
           username: user.User.name,
           role: user.User.role,
           email: user.email,
+          shopId: user.shopId,
         },
         process.env.JWT_SECRET,
         {
